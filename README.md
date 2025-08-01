@@ -1,6 +1,6 @@
 # Research-Net: Community Detection in Academic Papers
 
-A scalable big-data framework for uncovering thematic communities in large-scale scholarly graphs. By combining distributed graph construction, semantic-embedding–based similarity, and weighted PageRank, Research-Net detects cohesive groups of research papers and highlights influential works across millions of records.
+A scalable big-data framework based on Spark for uncovering thematic communities in large-scale scholarly graphs. By combining distributed graph construction, semantic-embedding–based similarity, and weighted PageRank, Research-Net detects cohesive groups of research papers and highlights influential works across millions of records.
 
 ---
 
