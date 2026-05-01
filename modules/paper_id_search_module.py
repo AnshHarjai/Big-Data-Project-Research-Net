@@ -12,7 +12,7 @@ from pyspark.sql.types import (
 )
 
 # for UI
-from IPython.display import display, HTML
+from IPython.display import display, HTML, IFrame
 import ipywidgets as widgets
 from pyvis.network import Network
 
@@ -68,7 +68,7 @@ def fetch_batch(id_lists):
     out = []
     for batch in id_lists:
         time.sleep(2)  # throttle
-        api_key = "X3R0FOZJ2Q57yiS3W6Sgp7F3mfJWna9B7K3vLy3N"
+        api_key = "s2k-ggzwNeWClIa8x62J17JKhjb28bApxfHdYxF7A63v"
         headers = {"x-api-key": api_key}
         r = session.post(API_URL, params={"fields":FIELDS}, headers = headers, json={"ids":batch})
         r.raise_for_status()
@@ -144,6 +144,14 @@ def build_graph_from_ids(spark, sc, seed_ids, min_similarity=0.0):
         .select("src","dst","weight")
     )
 
+    if edges.limit(1).count() == 0:
+        fallback_threshold = max(min_similarity, 0.2)
+        print(
+            "No citation edges found for the seed IDs; using similarity edges "
+            f"(min_similarity={fallback_threshold})."
+        )
+        edges = build_similarity_edges(vertices, cos_udf, fallback_threshold)
+
     # 7) assemble GraphFrame
     from graphframes import GraphFrame
     g = GraphFrame(vertices, edges)
@@ -199,9 +207,32 @@ def generate_interactive_graph(g, output_file, project_root:Path, height="800px"
     net.write_html(output_file)
     os.chdir(old)
 
-    full = out_dir/output_file
-    display(HTML(str(full)))
+    full = out_dir / output_file
+    display(IFrame(src=full.resolve().as_uri(), width=width, height=height))
     return str(full)
+
+
+def build_similarity_edges(vertices, cos_udf, min_similarity=0.2):
+    """Build similarity edges between all vertex pairs using embeddings."""
+    v1 = vertices.select(col("id").alias("src"), col("vector").alias("emb_src"))
+    v2 = vertices.select(col("id").alias("dst"), col("vector").alias("emb_dst"))
+
+    raw = v1.crossJoin(v2).filter(col("src") < col("dst"))
+    edges = (
+        raw
+        .withColumn("weight", cos_udf("emb_src", "emb_dst"))
+        .filter(col("weight") >= lit(min_similarity))
+        .select("src", "dst", "weight")
+    )
+
+    edges_dir = edges.union(
+        edges.select(
+            col("dst").alias("src"),
+            col("src").alias("dst"),
+            col("weight"),
+        )
+    )
+    return edges_dir
 
 
 # ─── 8. PARQUET SAVE ──────────────────────────────────────────────────────────

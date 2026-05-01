@@ -16,7 +16,7 @@ from pyspark.sql.types import (
 )
 
 # for UI
-from IPython.display import display, HTML
+from IPython.display import display, HTML, IFrame
 import ipywidgets as widgets
 from pyvis.network import Network
 
@@ -74,7 +74,7 @@ def publication_search(publication: str, year: int,
         "offset": offset
     }
 
-    api_key = "X3R0FOZJ2Q57yiS3W6Sgp7F3mfJWna9B7K3vLy3N"
+    api_key = "s2k-ggzwNeWClIa8x62J17JKhjb28bApxfHdYxF7A63v"
     headers = {"x-api-key": api_key}
     
     url = f"{API_BASE}/paper/search"
@@ -239,7 +239,7 @@ def generate_interactive_graph(
     os.chdir(old)
 
     full_path = out_dir / output_file
-    display(HTML(str(full_path)))
+    display(IFrame(src=full_path.resolve().as_uri(), width=width, height=height))
     return str(full_path)
 
 

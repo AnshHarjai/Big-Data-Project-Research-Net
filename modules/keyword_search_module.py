@@ -96,7 +96,7 @@ def keyword_search(keywords, limit=100, offset=0, api_base=None, fields=None):
     url = f"{api_base}/paper/search"
     session = requests.Session()
     try:
-        api_key = "X3R0FOZJ2Q57yiS3W6Sgp7F3mfJWna9B7K3vLy3N"
+        api_key = "s2k-ggzwNeWClIa8x62J17JKhjb28bApxfHdYxF7A63v"
         headers = {"x-api-key": api_key}
         r = session.get(url, params=params, headers = headers)
         r.raise_for_status()
@@ -192,7 +192,14 @@ def build_graph_from_keywords(
         edges = build_star_edges(vertices, df_seed, central_paper, cos_sim_udf)
     else:
         # edges = build_fully_connected_edges(vertices, min_similarity, cos_sim_udf)
-         edges = build_citation_edges(vertices, df_seed, cos_sim_udf)
+        edges = build_citation_edges(vertices, df_seed, cos_sim_udf)
+        if edges.limit(1).count() == 0:
+            fallback_threshold = max(min_similarity, 0.2)
+            print(
+                "No citation edges found in the seed set; using similarity edges "
+                f"(min_similarity={fallback_threshold})."
+            )
+            edges = build_similarity_edges(vertices, cos_sim_udf, fallback_threshold)
     # 6) GraphFrame
     from graphframes import GraphFrame
     g = GraphFrame(vertices, edges)
@@ -321,6 +328,34 @@ def build_citation_edges(vertices, df_seed, cos_sim_udf):
     )
     return edges
 
+
+def build_similarity_edges(vertices, cos_sim_udf, min_similarity=0.2):
+    """
+    Build similarity edges between all vertex pairs using embeddings.
+    Edges are undirected but returned as two directed edges.
+    """
+    v1 = vertices.select(col("id").alias("src"), col("vector").alias("emb_src"))
+    v2 = vertices.select(col("id").alias("dst"), col("vector").alias("emb_dst"))
+
+    raw = v1.crossJoin(v2).filter(col("src") < col("dst"))
+    edges = (
+        raw
+        .withColumn("weight", cos_sim_udf("emb_src", "emb_dst"))
+        .filter(col("weight") >= lit(min_similarity))
+        .select("src", "dst", "weight")
+        .withColumn("edge_type", lit("similarity"))
+    )
+
+    edges_dir = edges.union(
+        edges.select(
+            col("dst").alias("src"),
+            col("src").alias("dst"),
+            col("weight"),
+            col("edge_type"),
+        )
+    )
+    return edges_dir
+
 # ─── 6. PAGERANK ───────────────────────────────────────────────────────────────
 
 def compute_pagerank(g, reset_prob=0.15, max_iter=10):
@@ -403,7 +438,7 @@ def generate_interactive_graph(
 
     # Now read & display
     full_path = out_dir / output_file
-    display(HTML(str(full_path)))
+    display(IFrame(src=full_path.resolve().as_uri(), width=width, height=height))
     print(f"Saved interactive graph to {full_path}")
     return str(full_path)
 
